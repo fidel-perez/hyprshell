@@ -9,6 +9,14 @@ pub fn set_icon(class: &str, pid: i32, image: &Image) {
     let image = image.clone();
     let _span = debug_span!("icon", class = class).entered();
 
+    // Wine gives every program of a prefix one class, so the exe name comes first.
+    if let Some(exe) = wine_exe_by_pid(pid)
+        && load_icon_from_cache(&exe, &image).is_some()
+    {
+        trace!("Icon by wine exe {exe} for {class} by PID ({pid})");
+        return;
+    }
+
     if load_icon_from_cache(class, &image).is_some() {
         return;
     }
@@ -41,6 +49,19 @@ pub fn set_icon(class: &str, pid: i32, image: &Image) {
         warn!("Failed to read cmdline for PID {}", pid);
     }
 }
+
+// Wine writes the Windows path, `C:\...\Game.exe -arg`, as one argument.
+fn wine_exe_by_pid(pid: i32) -> Option<String> {
+    let cmdline = fs::read_to_string(format!("/proc/{pid}/cmdline")).ok()?;
+    wine_exe_name(cmdline.split('\x00').next()?)
+}
+
+fn wine_exe_name(arg: &str) -> Option<String> {
+    let end = arg.to_ascii_lowercase().find(".exe")? + ".exe".len();
+    let path = arg.get(..end)?;
+    path.rsplit(['\\', '/']).next().map(String::from)
+}
+
 // check if the icon is in theme and apply it
 fn load_icon_from_cache(name: &str, pic: &Image) -> Option<Box<Path>> {
     let name_lower = name.to_ascii_lowercase();
@@ -91,3 +112,19 @@ const KNOWN_WORKAROUNDS: &[(&str, &str)] = &[
     // https://github.com/imputnet/helium-linux/pull/296
     ("helium", "helium-browser"),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::wine_exe_name;
+
+    #[test]
+    fn wine_exe_name_reads_windows_paths() {
+        assert_eq!(
+            wine_exe_name(
+                r"C:\Program Files (x86)\StarCraft II\Versions\Base97563\SC2_x64.exe -sso=1"
+            ),
+            Some("SC2_x64.exe".into())
+        );
+        assert_eq!(wine_exe_name("/usr/bin/firefox"), None);
+    }
+}
