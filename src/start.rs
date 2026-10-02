@@ -7,7 +7,7 @@ use anyhow::Context;
 use async_channel::Sender;
 use core_lib::listener::{hyprshell_config_listener, hyprshell_css_listener};
 use core_lib::transfer::ExternalTransferType;
-use core_lib::{WarnWithDetails, notify, notify_resident, notify_warn};
+use core_lib::{WarnWithDetails, notify, notify_resident};
 use exec_lib::listener::{hyprland_config_listener, monitor_listener};
 use relm4::RelmApp;
 use relm4::adw::gtk::glib;
@@ -49,8 +49,9 @@ pub fn start(
             }
         }
         Ok((Ordering::Less, _)) => {
-            notify_warn(
+            notify(
                 "Hyprshell was downgraded, downgrading config must be done manually if needed",
+                Duration::from_secs(8),
             );
         }
         Ok((Ordering::Equal, _)) => {
